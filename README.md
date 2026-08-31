@@ -11,18 +11,17 @@ In this project we are recreating the Nvidia STRIVE model from scratch. This pro
 ### Basic System Requirement
 | **Component**                 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | **Specification**              |
 |-------------------------------|--------------------------------------|--------------------------------|
-| Ubuntu                        |                                      | 22.02.05 LTS                   |
-| Python                        |                                      | 3.10.2                         |
-| PyTorch                       |                                      | 2.13.0                         |
-| torchvision                   |                                      | 0.28.0                         |
-| torchaudio                    |                                      | 2.11.0                         |
+| Ubuntu                        |                                      | 24.04.4 LTS                    |
+| Python                        |                                      | 3.12.3                         |
+| PyTorch                       |                                      | 2.12.1                         |
+| PyTorch CUDA                  |                                      | 13.0                           |
 | torch-geometric               |                                      | 2.8.0.post1                    |
+| ConfigArgParse                |                                      | 1.7.5                          |
 | NumPy                         |                                      | 1.26.4                         |
-| Matplotlib                    |                                      | 3.7.5                          |
-| scikit-learn                  |                                      | 1.7.2                          |
-| nuScenes devkit               |                                      | 1.1.5                          |
+| Matplotlib                    |                                      | 3.11.1                         |
+| scikit-learn                  |                                      | 1.9.0                          |
+| nuScenes devkit               |                                      | 1.2.0                          |
 | NVIDIA Driver                 |                                      | 580.95.05                      |
-| CUDA reported by `nvidia-smi` |                                      | 13.0                           |
 | GPU                           |                                      | NVIDIA GeForce RTX 5090, 32 GB |
 
 ### STRIVE Blueprint

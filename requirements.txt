@@ -1,0 +1,20 @@
+# Environment: Ubuntu 24.04.4 LTS
+# Python: 3.12.3
+# PyTorch CUDA: 13.0
+
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+numpy==1.26.4
+
+torch==2.12.1+cu130
+torch-geometric==2.8.0.post1
+
+nuscenes-devkit==1.2.0
+
+matplotlib==3.11.1
+scikit-learn==1.9.0
+
+ConfigArgParse==1.7.5
+PyYAML==6.0.3
+tqdm==4.70.0
+
