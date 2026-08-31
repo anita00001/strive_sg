@@ -242,3 +242,66 @@ def transform2frame(
         ],
         dim=-1,
     )
+
+def pairwise_transforms(poses: torch.Tensor) -> torch.Tensor:
+    """
+    Compute every pose relative to every other pose.
+
+    Parameters
+    ----------
+    poses:
+        Shape (B, N, 3) for [x, y, heading]
+        or
+        Shape (B, N, 4) for [x, y, hx, hy]
+
+    Returns
+    -------
+    torch.Tensor
+        Shape (B, N, N, D)
+
+        result[b, i, j] is pose j expressed
+        in pose i's coordinate frame.
+    """
+    if poses.ndim != 3:
+        raise ValueError("poses must have shape (B, N, D)")
+
+    batch_size, num_agents, pose_dim = poses.shape
+
+    if pose_dim not in (3, 4):
+        raise ValueError(
+            "pose dimension must be 3 or 4"
+        )
+
+    # Each agent becomes a reference frame.
+    frames = poses.reshape(
+        batch_size * num_agents,
+        pose_dim,
+    )
+
+    # Duplicate the complete scene once per reference agent.
+    scene_poses = (
+        poses.unsqueeze(1)
+        .expand(
+            batch_size,
+            num_agents,
+            num_agents,
+            pose_dim,
+        )
+        .reshape(
+            batch_size * num_agents,
+            num_agents,
+            pose_dim,
+        )
+    )
+
+    relative = transform2frame(
+        frames,
+        scene_poses,
+    )
+
+    return relative.reshape(
+        batch_size,
+        num_agents,
+        num_agents,
+        pose_dim,
+    )

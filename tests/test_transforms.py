@@ -11,6 +11,10 @@ from src.utils.transforms import (
     transform2frame
 )
 
+from src.utils.transforms import (
+    pairwise_transforms
+)
+
 
 def test_kinematics2angle_zero_heading():
     state = torch.tensor(
@@ -275,3 +279,98 @@ def test_transform_heading_vector():
         expected,
         atol=1e-6,
     )
+
+# test for pairwise_transforms
+def test_pairwise_transforms_shape():
+    poses = torch.tensor(
+        [
+            [
+                [0.0, 0.0, 0.0],
+                [5.0, 0.0, 0.0],
+                [0.0, 5.0, math.pi / 2],
+            ]
+        ]
+    )
+
+    result = pairwise_transforms(poses)
+
+    assert result.shape == (1, 3, 3, 3)
+
+# test the diagonal elements of the pairwise transforms
+def test_pairwise_self_transform():
+    poses = torch.tensor(
+        [
+            [
+                [2.0, 3.0, 0.5],
+                [8.0, -1.0, -0.2],
+            ]
+        ]
+    )
+
+    result = pairwise_transforms(poses)
+
+    diagonal = torch.stack(
+        [
+            result[0, 0, 0],
+            result[0, 1, 1],
+        ]
+    )
+
+    expected = torch.zeros_like(diagonal)
+
+    assert torch.allclose(
+        diagonal,
+        expected,
+        atol=1e-6,
+    )
+
+#test a simple relative position transform for pairwise_transforms
+def test_pairwise_relative_position():
+    poses = torch.tensor(
+        [
+            [
+                [0.0, 0.0, 0.0],
+                [5.0, 0.0, 0.0],
+            ]
+        ]
+    )
+
+    result = pairwise_transforms(poses)
+
+    # Agent 1 from agent 0's frame.
+    assert torch.allclose(
+        result[0, 0, 1],
+        torch.tensor([5.0, 0.0, 0.0]),
+        atol=1e-6,
+    )
+
+    # Agent 0 from agent 1's frame.
+    assert torch.allclose(
+        result[0, 1, 0],
+        torch.tensor([-5.0, 0.0, 0.0]),
+        atol=1e-6,
+    )
+
+#test rotated frame for pairwise_transforms
+def test_pairwise_rotated_frame():
+    poses = torch.tensor(
+        [
+            [
+                [0.0, 0.0, math.pi / 2],
+                [0.0, 5.0, math.pi / 2],
+            ]
+        ]
+    )
+
+    result = pairwise_transforms(poses)
+
+    expected = torch.tensor(
+        [5.0, 0.0, 0.0]
+    )
+
+    assert torch.allclose(
+        result[0, 0, 1],
+        expected,
+        atol=1e-6,
+    )
+
