@@ -773,4 +773,157 @@ def gen_car_coords(
 
     return world_coordinates
 
+# sample an agent-oriented crop from a raster map
+def get_map_obs(
+    maps: torch.Tensor,
+    meters_per_pixel: torch.Tensor,
+    frames: torch.Tensor,
+    map_indices: torch.Tensor,
+    bounds: list[float] | tuple[float, float, float, float],
+    *,
+    length_pixels: int = 256,
+    width_pixels: int = 256,
+) -> torch.Tensor:
+    """
+    Sample agent-oriented local map observations.
+
+    Parameters
+    ----------
+    maps:
+        Rasterized maps with shape:
+
+            (M, C, H, W)
+
+        where M is number of maps.
+
+    meters_per_pixel:
+        Shape (M, 2), containing [dy, dx]-compatible
+        map resolution values in meters/pixel.
+
+    frames:
+        Shape (B, 4):
+
+            [x, y, hx, hy]
+
+    map_indices:
+        Shape (B,), selecting which global map each frame uses.
+
+    bounds:
+        [low_l, low_w, high_l, high_w] in meters.
+
+    Returns
+    -------
+    torch.Tensor
+        Local raster observations:
+
+            (B, C, L, W)
+    """
+    if maps.ndim != 4:
+        raise ValueError(
+            "maps must have shape (M, C, H, W)"
+        )
+
+    if frames.ndim != 2 or frames.shape[-1] != 4:
+        raise ValueError(
+            "frames must have shape (B, 4)"
+        )
+
+    if map_indices.ndim != 1:
+        raise ValueError(
+            "map_indices must have shape (B,)"
+        )
+
+    batch_size = frames.shape[0]
+
+    if map_indices.shape[0] != batch_size:
+        raise ValueError(
+            "frames and map_indices must have equal batch size"
+        )
+
+    num_channels = maps.shape[1]
+
+    coordinates = gen_car_coords(
+        positions=frames[:, :2],
+        headings=frames[:, 2:4],
+        num_channels=num_channels,
+        length_pixels=length_pixels,
+        width_pixels=width_pixels,
+        bounds=bounds,
+    )
+
+    # Avoid invalid integer conversion for NaN poses.
+    coordinates = torch.nan_to_num(
+        coordinates,
+        nan=0.0,
+    )
+
+    resolution = meters_per_pixel[
+        map_indices
+    ].view(
+        batch_size,
+        1,
+        1,
+        1,
+        2,
+    )
+
+    pixel_coordinates = torch.round(
+        coordinates / resolution
+    ).long()
+
+    x_pixels = pixel_coordinates[..., 0]
+    y_pixels = pixel_coordinates[..., 1]
+
+    map_height = maps.shape[2]
+    map_width = maps.shape[3]
+
+    outside = (
+        (x_pixels < 0)
+        | (x_pixels >= map_width)
+        | (y_pixels < 0)
+        | (y_pixels >= map_height)
+    )
+
+    # Match STRIVE's reference behavior:
+    # out-of-map samples are redirected to pixel (0, 0).
+    x_pixels = x_pixels.clone()
+    y_pixels = y_pixels.clone()
+
+    x_pixels[outside] = 0
+    y_pixels[outside] = 0
+
+    selected_maps = map_indices.view(
+        batch_size,
+        1,
+        1,
+        1,
+    ).expand(
+        batch_size,
+        num_channels,
+        length_pixels,
+        width_pixels,
+    )
+
+    channel_indices = torch.arange(
+        num_channels,
+        device=maps.device,
+    ).view(
+        1,
+        num_channels,
+        1,
+        1,
+    ).expand(
+        batch_size,
+        num_channels,
+        length_pixels,
+        width_pixels,
+    )
+
+    return maps[
+        selected_maps,
+        channel_indices,
+        y_pixels,
+        x_pixels,
+    ]
+
 

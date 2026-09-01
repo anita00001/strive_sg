@@ -19,6 +19,8 @@ from src.datasets.nuscenes_utils import (
 
 from src.datasets.nuscenes_utils import gen_car_coords
 
+from src.datasets.nuscenes_utils import get_map_obs
+
 # category mapping
 def test_category_mapping():
     (
@@ -618,5 +620,188 @@ def test_gen_car_coords_vehicle_dimensions():
             [0.0, 1.0]
         ),
         atol=1e-6,
+    )
+
+# Test an identity-oriented crop
+def test_get_map_obs_identity_orientation():
+    raster = torch.arange(
+        25,
+        dtype=torch.float32,
+    ).reshape(
+        1,
+        1,
+        5,
+        5,
+    )
+
+    meters_per_pixel = torch.tensor(
+        [
+            [1.0, 1.0]
+        ]
+    )
+
+    frames = torch.tensor(
+        [
+            [2.0, 2.0, 1.0, 0.0]
+        ]
+    )
+
+    map_indices = torch.tensor(
+        [0]
+    )
+
+    crop = get_map_obs(
+        maps=raster,
+        meters_per_pixel=meters_per_pixel,
+        frames=frames,
+        map_indices=map_indices,
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+        length_pixels=3,
+        width_pixels=3,
+    )
+
+    assert crop.shape == (
+        1,
+        1,
+        3,
+        3,
+    )
+
+    expected = torch.tensor(
+        [
+            [
+                [
+                    [6.0, 11.0, 16.0],
+                    [7.0, 12.0, 17.0],
+                    [8.0, 13.0, 18.0],
+                ]
+            ]
+        ]
+    )
+
+    assert torch.equal(
+        crop,
+        expected,
+    )
+
+# test a rotated crop
+def test_get_map_obs_rotated_agent():
+    raster = torch.arange(
+        25,
+        dtype=torch.float32,
+    ).reshape(
+        1,
+        1,
+        5,
+        5,
+    )
+
+    meters_per_pixel = torch.tensor(
+        [
+            [1.0, 1.0]
+        ]
+    )
+
+    frames = torch.tensor(
+        [
+            [2.0, 2.0, 0.0, 1.0]
+        ]
+    )
+
+    crop = get_map_obs(
+        maps=raster,
+        meters_per_pixel=meters_per_pixel,
+        frames=frames,
+        map_indices=torch.tensor([0]),
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+        length_pixels=3,
+        width_pixels=3,
+    )
+
+    expected = torch.tensor(
+        [
+            [
+                [
+                    [8.0, 7.0, 6.0],
+                    [13.0, 12.0, 11.0],
+                    [18.0, 17.0, 16.0],
+                ]
+            ]
+        ]
+    )
+
+    assert torch.equal(
+        crop,
+        expected,
+    )
+
+# Test semantic channels
+def test_get_map_obs_multiple_channels():
+    maps = torch.zeros(
+        1,
+        4,
+        5,
+        5,
+    )
+
+    maps[:, 0] = 1.0
+    maps[:, 1] = 2.0
+    maps[:, 2] = 3.0
+    maps[:, 3] = 4.0
+
+    crop = get_map_obs(
+        maps=maps,
+        meters_per_pixel=torch.tensor(
+            [
+                [1.0, 1.0]
+            ]
+        ),
+        frames=torch.tensor(
+            [
+                [2.0, 2.0, 1.0, 0.0]
+            ]
+        ),
+        map_indices=torch.tensor([0]),
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+        length_pixels=3,
+        width_pixels=3,
+    )
+
+    assert crop.shape == (
+        1,
+        4,
+        3,
+        3,
+    )
+
+    assert torch.all(
+        crop[:, 0] == 1.0
+    )
+
+    assert torch.all(
+        crop[:, 1] == 2.0
+    )
+
+    assert torch.all(
+        crop[:, 2] == 3.0
+    )
+
+    assert torch.all(
+        crop[:, 3] == 4.0
     )
 
