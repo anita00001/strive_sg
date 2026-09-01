@@ -280,3 +280,73 @@ def get_ego_inds(scene_graph) -> torch.Tensor:
 
     return ego_mask
 
+def normalize_scene_graph(
+    scene_graph,
+    state_normalizer: MeanStdNormalizer,
+    att_normalizer: MeanStdNormalizer,
+    *,
+    unnorm: bool = False,
+):
+    """
+    Normalize or unnormalize STRIVE graph attributes in-place.
+
+    State normalization applies to:
+        past
+        past_gt
+        future
+        future_gt
+        pos
+
+    Attribute normalization applies to:
+        lw
+    """
+    state_fn = (
+        state_normalizer.unnormalize
+        if unnorm
+        else state_normalizer.normalize
+    )
+
+    att_fn = (
+        att_normalizer.unnormalize
+        if unnorm
+        else att_normalizer.normalize
+    )
+
+    state_attributes = (
+        "past",
+        "past_gt",
+        "future",
+        "future_gt",
+        "pos",
+    )
+
+    for name in state_attributes:
+        if hasattr(scene_graph, name):
+            value = getattr(
+                scene_graph,
+                name,
+            )
+
+            if (
+                isinstance(value, torch.Tensor)
+                and value.ndim > 1
+            ):
+                setattr(
+                    scene_graph,
+                    name,
+                    state_fn(value),
+                )
+
+    if hasattr(scene_graph, "lw"):
+        value = scene_graph.lw
+
+        if (
+            isinstance(value, torch.Tensor)
+            and value.ndim > 1
+        ):
+            scene_graph.lw = (
+                att_fn(value)
+            )
+
+    return scene_graph
+

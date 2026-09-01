@@ -223,3 +223,83 @@ def test_get_ego_inds():
         expected,
     )
 
+def test_normalize_scene_graph():
+    graph = build_scene_graph(
+        past=torch.tensor(
+            [
+                [
+                    [12.0, 25.0],
+                ]
+            ]
+        ),
+        future=torch.tensor(
+            [
+                [
+                    [8.0, 15.0],
+                ]
+            ]
+        ),
+        sem=torch.zeros(1, 2),
+        lw=torch.tensor(
+            [
+                [5.0, 2.0]
+            ]
+        ),
+        past_vis=torch.ones(1, 1),
+        future_vis=torch.ones(1, 1),
+    )
+
+    state_normalizer = MeanStdNormalizer(
+        mean_vals=torch.tensor(
+            [10.0, 20.0]
+        ),
+        std_vals=torch.tensor(
+            [2.0, 5.0]
+        ),
+    )
+
+    att_normalizer = MeanStdNormalizer(
+        mean_vals=torch.tensor(
+            [4.0, 1.0]
+        ),
+        std_vals=torch.tensor(
+            [1.0, 0.5]
+        ),
+    )
+
+    normalize_scene_graph(
+        graph,
+        state_normalizer,
+        att_normalizer,
+    )
+
+    assert torch.allclose(
+        graph.past,
+        torch.tensor(
+            [
+                [
+                    [1.0, 1.0],
+                ]
+            ]
+        ),
+    )
+
+    assert torch.allclose(
+        graph.future,
+        torch.tensor(
+            [
+                [
+                    [-1.0, -1.0],
+                ]
+            ]
+        ),
+    )
+
+    assert torch.allclose(
+        graph.lw,
+        torch.tensor(
+            [
+                [1.0, 2.0]
+            ]
+        ),
+    )
