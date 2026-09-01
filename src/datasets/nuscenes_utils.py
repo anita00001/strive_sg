@@ -555,3 +555,222 @@ def build_kinematic_state(
     )
 
 
+# Generate world-space coordinates aligned with each agent
+def gen_car_coords(
+    positions: torch.Tensor,
+    headings: torch.Tensor,
+    num_channels: int,
+    length_pixels: int,
+    width_pixels: int,
+    *,
+    bounds: list[float] | tuple[float, float, float, float] | None = None,
+    lengths: torch.Tensor | None = None,
+    widths: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """
+    Generate world-space sampling coordinates aligned with each agent.
+
+    Parameters
+    ----------
+    positions:
+        Shape (B, 2), world-space [x, y].
+
+    headings:
+        Shape (B, 2), unit heading vectors [hx, hy].
+
+    num_channels:
+        Number of map channels.
+
+    length_pixels:
+        Number of samples along the vehicle longitudinal axis.
+
+    width_pixels:
+        Number of samples along the vehicle lateral axis.
+
+    bounds:
+        [low_l, low_w, high_l, high_w] in meters.
+
+    lengths, widths:
+        Optional per-agent physical dimensions. Used instead of
+        bounds when sampling the area occupied by a vehicle.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape:
+
+            (B, C, L, W, 2)
+
+        containing world-space [x, y] sample positions.
+    """
+    if positions.ndim != 2 or positions.shape[-1] != 2:
+        raise ValueError(
+            "positions must have shape (B, 2)"
+        )
+
+    if headings.ndim != 2 or headings.shape[-1] != 2:
+        raise ValueError(
+            "headings must have shape (B, 2)"
+        )
+
+    if positions.shape[0] != headings.shape[0]:
+        raise ValueError(
+            "positions and headings must have equal batch size"
+        )
+
+    batch_size = positions.shape[0]
+    device = positions.device
+    dtype = positions.dtype
+
+    if bounds is not None:
+        if len(bounds) != 4:
+            raise ValueError(
+                "bounds must contain four values"
+            )
+
+        longitudinal = torch.linspace(
+            bounds[0],
+            bounds[2],
+            length_pixels,
+            device=device,
+            dtype=dtype,
+        )
+
+        lateral = torch.linspace(
+            bounds[1],
+            bounds[3],
+            width_pixels,
+            device=device,
+            dtype=dtype,
+        )
+
+        longitudinal = longitudinal.view(
+            1,
+            1,
+            length_pixels,
+            1,
+        ).expand(
+            batch_size,
+            num_channels,
+            length_pixels,
+            width_pixels,
+        )
+
+        lateral = lateral.view(
+            1,
+            1,
+            1,
+            width_pixels,
+        ).expand(
+            batch_size,
+            num_channels,
+            length_pixels,
+            width_pixels,
+        )
+
+    elif lengths is not None and widths is not None:
+
+        longitudinal = torch.linspace(
+            -1.0,
+            1.0,
+            length_pixels,
+            device=device,
+            dtype=dtype,
+        )
+
+        lateral = torch.linspace(
+            -1.0,
+            1.0,
+            width_pixels,
+            device=device,
+            dtype=dtype,
+        )
+
+        longitudinal = longitudinal.view(
+            1,
+            1,
+            length_pixels,
+            1,
+        ).expand(
+            batch_size,
+            num_channels,
+            length_pixels,
+            width_pixels,
+        )
+
+        lateral = lateral.view(
+            1,
+            1,
+            1,
+            width_pixels,
+        ).expand(
+            batch_size,
+            num_channels,
+            length_pixels,
+            width_pixels,
+        )
+
+        longitudinal = (
+            longitudinal
+            * lengths.view(batch_size, 1, 1, 1)
+            / 2.0
+        )
+
+        lateral = (
+            lateral
+            * widths.view(batch_size, 1, 1, 1)
+            / 2.0
+        )
+
+    else:
+        raise ValueError(
+            "provide either bounds or both lengths and widths"
+        )
+
+    hx = headings[:, 0].view(
+        batch_size,
+        1,
+        1,
+        1,
+    )
+
+    hy = headings[:, 1].view(
+        batch_size,
+        1,
+        1,
+        1,
+    )
+
+    # Rotate local coordinates into world coordinates.
+    world_x = (
+        longitudinal * hx
+        - lateral * hy
+    )
+
+    world_y = (
+        longitudinal * hy
+        + lateral * hx
+    )
+
+    world_coordinates = torch.stack(
+        [
+            world_x,
+            world_y,
+        ],
+        dim=-1,
+    )
+
+    world_coordinates = (
+        world_coordinates
+        + positions.view(
+            batch_size,
+            1,
+            1,
+            1,
+            2,
+        )
+    )
+
+    return world_coordinates
+
+
