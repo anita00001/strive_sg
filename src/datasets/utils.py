@@ -240,3 +240,43 @@ def build_scene_graph(
 
     return graph
 
+#First agent - Ego-index
+def get_ego_inds(scene_graph) -> torch.Tensor:
+    """
+    Return a boolean mask selecting the first agent of each graph
+    inside a PyTorch Geometric batch.
+
+    Example
+    -------
+    batch = [0, 0, 0, 1, 1, 1, 1]
+
+    returns:
+        [True, False, False, True, False, False, False]
+    """
+    if not hasattr(scene_graph, "batch"):
+        raise ValueError(
+            "scene_graph must be a batched PyG graph with a batch vector"
+        )
+
+    batch = scene_graph.batch
+
+    if batch.numel() == 0:
+        return torch.empty(
+            0,
+            dtype=torch.bool,
+            device=batch.device,
+        )
+
+    ego_mask = torch.zeros_like(
+        batch,
+        dtype=torch.bool,
+    )
+
+    ego_mask[0] = True
+
+    ego_mask[1:] = (
+        batch[1:] != batch[:-1]
+    )
+
+    return ego_mask
+

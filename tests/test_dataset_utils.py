@@ -5,7 +5,9 @@ from src.datasets.utils import (
     build_fully_connected_edge_index,
     build_scene_graph,
 )
+from torch_geometric.data import Batch
 
+from src.datasets.utils import (get_ego_inds)
 
 def test_normalizer():
     normalizer = MeanStdNormalizer(
@@ -182,3 +184,42 @@ def test_scene_graph():
     assert graph.future.shape == (3, 12, 6)
     assert graph.sem.shape == (3, 2)
     assert graph.lw.shape == (3, 2)
+
+def test_get_ego_inds():
+    def make_scene(num_agents):
+        return build_scene_graph(
+            past=torch.zeros(num_agents, 4, 6),
+            future=torch.zeros(num_agents, 12, 6),
+            sem=torch.zeros(num_agents, 2),
+            lw=torch.zeros(num_agents, 2),
+            past_vis=torch.ones(num_agents, 4),
+            future_vis=torch.ones(num_agents, 12),
+        )
+
+    scene_a = make_scene(3)
+    scene_b = make_scene(5)
+
+    batch = Batch.from_data_list(
+        [scene_a, scene_b]
+    )
+
+    mask = get_ego_inds(batch)
+
+    expected = torch.tensor(
+        [
+            True,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
+
+    assert torch.equal(
+        mask.cpu(),
+        expected,
+    )
+
