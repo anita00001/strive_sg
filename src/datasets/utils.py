@@ -182,3 +182,61 @@ def build_fully_connected_edge_index(
         ],
         dim=0,
     ).contiguous()
+
+def build_scene_graph(
+    past: torch.Tensor,
+    future: torch.Tensor,
+    sem: torch.Tensor,
+    lw: torch.Tensor,
+    past_vis: torch.Tensor,
+    future_vis: torch.Tensor,
+    *,
+    past_gt: torch.Tensor | None = None,
+    future_gt: torch.Tensor | None = None,
+) -> Data:
+    """
+    Create one STRIVE-style PyTorch Geometric scene graph.
+
+    Each agent is one graph node.
+    """
+    num_agents = past.shape[0]
+
+    node_attributes = {
+        "past": past,
+        "future": future,
+        "sem": sem,
+        "lw": lw,
+        "past_vis": past_vis,
+        "future_vis": future_vis,
+    }
+
+    for name, value in node_attributes.items():
+        if value.shape[0] != num_agents:
+            raise ValueError(
+                f"{name} has {value.shape[0]} agents; "
+                f"expected {num_agents}"
+            )
+
+    edge_index = build_fully_connected_edge_index(
+        num_agents
+    )
+
+    graph = Data(
+        edge_index=edge_index,
+        past=past,
+        future=future,
+        sem=sem,
+        lw=lw,
+        past_vis=past_vis,
+        future_vis=future_vis,
+        num_nodes=num_agents,
+    )
+
+    if past_gt is not None:
+        graph.past_gt = past_gt
+
+    if future_gt is not None:
+        graph.future_gt = future_gt
+
+    return graph
+
