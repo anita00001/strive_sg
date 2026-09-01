@@ -2,6 +2,8 @@
 import numpy as np
 import torch
 
+from pyquaternion import Quaternion   # yaw
+
 
 NUSC_CATEGORY_KEYS = {
     "car": ["vehicle.car"],
@@ -312,4 +314,244 @@ def heading_change_rate(
                 )
 
     return result
+
+# Yaw from quaternion
+def quaternion_yaw(
+    rotation,
+) -> float:
+    """
+    Extract planar yaw from a nuScenes quaternion.
+
+    nuScenes stores orientation as:
+        [w, x, y, z]
+    """
+    rotation_matrix = Quaternion(
+        rotation
+    ).rotation_matrix
+
+    return float(
+        np.arctan2(
+            rotation_matrix[1, 0],
+            rotation_matrix[0, 0],
+        )
+    )
+
+
+# convert one annotation to planar pose
+'''
+    car pointing 90 degrees has:
+        h= pi/2
+        therefore, (hx, hy) = (cos(h), sin(h)) = (0,1)
+'''
+def annotation_to_pose(
+    annotation: dict,
+) -> np.ndarray:
+    """
+    Convert a nuScenes annotation to planar STRIVE pose.
+
+    Returns
+    -------
+    np.ndarray
+        [x, y, hx, hy]
+    """
+    translation = np.asarray(
+        annotation["translation"],
+        dtype=np.float64,
+    )
+
+    if translation.shape[0] < 2:
+        raise ValueError(
+            "annotation translation must contain x and y"
+        )
+
+    yaw = quaternion_yaw(
+        annotation["rotation"]
+    )
+
+    return np.array(
+        [
+            translation[0],
+            translation[1],
+            np.cos(yaw),
+            np.sin(yaw),
+        ],
+        dtype=np.float64,
+    )
+
+# Align an incomplete agent trajectory
+# The ego vehicle exists at every scene timestamp,
+# but another agent may only exist at some frames.
+# Use NaN to fill in missing positions and headings.
+def align_poses_to_timeline(
+    observation_times: np.ndarray,
+    poses: np.ndarray,
+    timeline: np.ndarray,
+    *,
+    atol: float = 1e-6,
+) -> np.ndarray:
+    """
+    Align observed poses to a common scene timeline.
+
+    Missing frames are represented by NaN.
+
+    Parameters
+    ----------
+    observation_times:
+        Shape (K,), seconds.
+
+    poses:
+        Shape (K, D).
+
+    timeline:
+        Shape (T,), seconds.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (T, D).
+    """
+    observation_times = np.asarray(
+        observation_times,
+        dtype=np.float64,
+    )
+
+    poses = np.asarray(
+        poses,
+        dtype=np.float64,
+    )
+
+    timeline = np.asarray(
+        timeline,
+        dtype=np.float64,
+    )
+
+    if poses.ndim != 2:
+        raise ValueError(
+            "poses must have shape (K, D)"
+        )
+
+    if observation_times.shape[0] != poses.shape[0]:
+        raise ValueError(
+            "observation_times and poses must have equal length"
+        )
+
+    aligned = np.full(
+        (timeline.shape[0], poses.shape[1]),
+        np.nan,
+        dtype=np.float64,
+    )
+
+    for time, pose in zip(
+        observation_times,
+        poses,
+    ):
+        matches = np.flatnonzero(
+            np.isclose(
+                timeline,
+                time,
+                atol=atol,
+                rtol=0.0,
+            )
+        )
+
+        if matches.size == 0:
+            raise ValueError(
+                f"observation time {time} is not in timeline"
+            )
+
+        aligned[matches[0]] = pose
+
+    return aligned
+
+# Build six dimensional state
+# [x,y,hx,hy] + [speed] + [hdot] --> [x, y, hx, hy, s, hdot]
+def build_kinematic_state(
+    poses: np.ndarray,
+    timestamps: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert an aligned pose trajectory into STRIVE state.
+
+    Input pose:
+        [x, y, hx, hy]
+
+    Output state:
+        [x, y, hx, hy, speed, heading_rate]
+
+    Returns
+    -------
+    state:
+        Shape (T, 6)
+
+    visibility:
+        Shape (T,), where 1 means the complete kinematic
+        state is available.
+    """
+    poses = np.asarray(
+        poses,
+        dtype=np.float64,
+    )
+
+    timestamps = np.asarray(
+        timestamps,
+        dtype=np.float64,
+    )
+
+    if poses.ndim != 2 or poses.shape[1] != 4:
+        raise ValueError(
+            "poses must have shape (T, 4)"
+        )
+
+    if timestamps.shape != (poses.shape[0],):
+        raise ValueError(
+            "timestamps must have shape (T,)"
+        )
+
+    positions = poses[:, :2]
+
+    velocities = velocity(
+        positions,
+        timestamps,
+    )
+
+    speed = np.linalg.norm(
+        velocities,
+        axis=1,
+    )
+
+    headings = np.arctan2(
+        poses[:, 3],
+        poses[:, 2],
+    )
+
+    heading_rate = heading_change_rate(
+        headings,
+        timestamps,
+    )
+
+    state = np.concatenate(
+        [
+            poses,
+            speed[:, None],
+            heading_rate[:, None],
+        ],
+        axis=1,
+    )
+
+    visibility = (
+        ~np.isnan(speed)
+        & ~np.isnan(heading_rate)
+        & ~np.isnan(poses).any(axis=1)
+    )
+
+    # Match STRIVE's handling of isolated observations:
+    # a pose without enough neighboring information to determine
+    # motion is not considered a usable state.
+    state[~visibility] = np.nan
+
+    return (
+        state,
+        visibility.astype(np.float32),
+    )
+
 
