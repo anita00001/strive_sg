@@ -9,6 +9,10 @@ from torch_geometric.data import Batch
 
 from src.datasets.utils import (get_ego_inds)
 
+from src.datasets.utils import (
+    normalize_scene_graph,
+)
+
 def test_normalizer():
     normalizer = MeanStdNormalizer(
         mean_vals=torch.tensor(
