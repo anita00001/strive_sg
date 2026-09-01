@@ -17,6 +17,8 @@ from src.datasets.nuscenes_utils import (
     quaternion_yaw,
 )
 
+from src.datasets.nuscenes_utils import gen_car_coords
+
 # category mapping
 def test_category_mapping():
     (
@@ -416,4 +418,205 @@ def test_build_kinematic_state_with_missing_frames():
 
     assert visibility[1] == 1.0
     assert visibility[2] == 1.0
+
+# test heading east
+def test_gen_car_coords_heading_east():
+    positions = torch.tensor(
+        [
+            [10.0, 20.0]
+        ]
+    )
+
+    headings = torch.tensor(
+        [
+            [1.0, 0.0]
+        ]
+    )
+
+    coords = gen_car_coords(
+        positions,
+        headings,
+        num_channels=1,
+        length_pixels=3,
+        width_pixels=3,
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+    )
+
+    assert coords.shape == (
+        1,
+        1,
+        3,
+        3,
+        2,
+    )
+
+    # Center pixel must coincide with the agent.
+    assert torch.allclose(
+        coords[0, 0, 1, 1],
+        torch.tensor(
+            [10.0, 20.0]
+        ),
+        atol=1e-6,
+    )
+
+    # One meter forward.
+    assert torch.allclose(
+        coords[0, 0, 2, 1],
+        torch.tensor(
+            [11.0, 20.0]
+        ),
+        atol=1e-6,
+    )
+
+# test heading north
+def test_gen_car_coords_heading_north():
+    positions = torch.tensor(
+        [
+            [0.0, 0.0]
+        ]
+    )
+
+    headings = torch.tensor(
+        [
+            [0.0, 1.0]
+        ]
+    )
+
+    coords = gen_car_coords(
+        positions,
+        headings,
+        num_channels=1,
+        length_pixels=3,
+        width_pixels=3,
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+    )
+
+    # One meter forward in local coordinates
+    # becomes +1 meter in global y.
+    assert torch.allclose(
+        coords[0, 0, 2, 1],
+        torch.tensor(
+            [0.0, 1.0]
+        ),
+        atol=1e-6,
+    )
+
+    # One meter in +local lateral direction
+    # becomes -1 meter in global x.
+    assert torch.allclose(
+        coords[0, 0, 1, 2],
+        torch.tensor(
+            [-1.0, 0.0]
+        ),
+        atol=1e-6,
+    )
+
+# test multiple map channels
+def test_gen_car_coords_channels_share_geometry():
+    positions = torch.tensor(
+        [
+            [5.0, 7.0]
+        ]
+    )
+
+    headings = torch.tensor(
+        [
+            [1.0, 0.0]
+        ]
+    )
+
+    coords = gen_car_coords(
+        positions,
+        headings,
+        num_channels=4,
+        length_pixels=3,
+        width_pixels=3,
+        bounds=[
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+        ],
+    )
+
+    assert coords.shape == (
+        1,
+        4,
+        3,
+        3,
+        2,
+    )
+
+    # Every semantic raster channel uses the same
+    # world-space sampling grid.
+    assert torch.allclose(
+        coords[:, 0],
+        coords[:, 1],
+    )
+
+    assert torch.allclose(
+        coords[:, 0],
+        coords[:, 2],
+    )
+
+    assert torch.allclose(
+        coords[:, 0],
+        coords[:, 3],
+    )
+
+# test vehicle-footprint mode
+def test_gen_car_coords_vehicle_dimensions():
+    positions = torch.tensor(
+        [
+            [0.0, 0.0]
+        ]
+    )
+
+    headings = torch.tensor(
+        [
+            [1.0, 0.0]
+        ]
+    )
+
+    coords = gen_car_coords(
+        positions,
+        headings,
+        num_channels=1,
+        length_pixels=3,
+        width_pixels=3,
+        lengths=torch.tensor(
+            [4.0]
+        ),
+        widths=torch.tensor(
+            [2.0]
+        ),
+    )
+
+    # Front center:
+    assert torch.allclose(
+        coords[0, 0, 2, 1],
+        torch.tensor(
+            [2.0, 0.0]
+        ),
+        atol=1e-6,
+    )
+
+    # Left/right extent:
+    assert torch.allclose(
+        coords[0, 0, 1, 2],
+        torch.tensor(
+            [0.0, 1.0]
+        ),
+        atol=1e-6,
+    )
 
