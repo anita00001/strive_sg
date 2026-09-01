@@ -269,27 +269,18 @@ Complete scenario generation
 Evaluation / clustering / visualization
 ```
 
-### At this point, we have
-- Project utilities/configuration        ✓
-- Coordinate and trajectory transforms  ✓
-- Tensor and scene-graph utilities      ✓
-- nuScenes trajectory utilities         ✓
+### Milestone: Rasterization
+- trajectories ✓
+- scene graphs ✓
+- coordinate transforms ✓
+- nuScenes semantic categories ✓
+- motion states ✓
+- HD-map rasterization ✓
+- agent-oriented map crops ✓
 
 ### Next Step
-- Rasterized local map environment
-
-```mermaid
-flowchart TD
-    A[nuScenes HD Map]
-    A --> B[drivable_area]
-    A --> C[carpark_area]
-    A --> D[road_divider]
-    A --> E[lane_divider]
-
-    B --> F[Rasterized Map]
-    C --> F
-    D --> F
-    E --> F
-
-    F --> G["Agent-Oriented Crop<br/>256 × 256"]
-    G --> H[TrafficModel CNN]
+- sequence slicing + agent selection
+- normalization + training noise
+- NuScenesDataset interface
+- raw nuScenes scene compilation
+- end-to-end mini dataset validation
