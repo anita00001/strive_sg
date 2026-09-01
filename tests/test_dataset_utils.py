@@ -1,6 +1,10 @@
 import torch
 
 from src.datasets.utils import MeanStdNormalizer
+from src.datasets.utils import (
+    build_fully_connected_edge_index,
+    build_scene_graph,
+)
 
 
 def test_normalizer():
@@ -92,4 +96,89 @@ def test_normalizer_supports_partial_features():
         result,
         expected,
     )
-    
+
+# test graph
+def test_fully_connected_edges_three_nodes():
+    edge_index = build_fully_connected_edge_index(3)
+
+    assert edge_index.shape == (2, 6)
+
+    edges = set(
+        map(
+            tuple,
+            edge_index.T.tolist(),
+        )
+    )
+
+    expected = {
+        (0, 1),
+        (0, 2),
+        (1, 0),
+        (1, 2),
+        (2, 0),
+        (2, 1),
+    }
+
+    assert edges == expected
+
+
+def test_fully_connected_edges_one_node():
+    edge_index = build_fully_connected_edge_index(1)
+
+    assert edge_index.shape == (2, 0)
+
+
+def test_scene_graph():
+    num_agents = 3
+    past_len = 4
+    future_len = 12
+    num_classes = 2
+
+    past = torch.zeros(
+        num_agents,
+        past_len,
+        6,
+    )
+
+    future = torch.zeros(
+        num_agents,
+        future_len,
+        6,
+    )
+
+    sem = torch.zeros(
+        num_agents,
+        num_classes,
+    )
+
+    lw = torch.zeros(
+        num_agents,
+        2,
+    )
+
+    past_vis = torch.ones(
+        num_agents,
+        past_len,
+    )
+
+    future_vis = torch.ones(
+        num_agents,
+        future_len,
+    )
+
+    graph = build_scene_graph(
+        past=past,
+        future=future,
+        sem=sem,
+        lw=lw,
+        past_vis=past_vis,
+        future_vis=future_vis,
+    )
+
+    assert graph.num_nodes == 3
+    assert graph.edge_index.shape == (2, 6)
+
+    assert graph.past.shape == (3, 4, 6)
+    assert graph.future.shape == (3, 12, 6)
+    assert graph.sem.shape == (3, 2)
+    assert graph.lw.shape == (3, 2)
