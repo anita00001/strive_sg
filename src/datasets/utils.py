@@ -1,5 +1,5 @@
 import torch
-
+from torch_geometric.data import Data
 
 class MeanStdNormalizer:
     """
@@ -136,4 +136,49 @@ class MeanStdNormalizer:
         return (
             state_data * std
         ) + mean
-    
+
+#Construct fully connected scene graph
+
+def build_fully_connected_edge_index(
+    num_nodes: int,
+) -> torch.Tensor:
+    """
+    Build a directed fully connected graph without self-loops.
+
+    For N nodes, the number of directed edges is:
+
+        N * (N - 1)
+    """
+    if num_nodes < 0:
+        raise ValueError(
+            "num_nodes cannot be negative"
+        )
+
+    if num_nodes <= 1:
+        return torch.empty(
+            (2, 0),
+            dtype=torch.long,
+        )
+
+    nodes = torch.arange(
+        num_nodes,
+        dtype=torch.long,
+    )
+
+    source = nodes.repeat_interleave(
+        num_nodes
+    )
+
+    target = nodes.repeat(
+        num_nodes
+    )
+
+    keep = source != target
+
+    return torch.stack(
+        [
+            source[keep],
+            target[keep],
+        ],
+        dim=0,
+    ).contiguous()
